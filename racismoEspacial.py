@@ -71,6 +71,7 @@ def construir_lista_adyacencia(caso):
 # Llamar a la función para leer la entrada y mostrar el resultado
 
 casos = leer_entrada()
+casosAdyacencia = []
 """
 for i, caso in enumerate(casos):
     print(f"Caso {i + 1}:")
@@ -80,9 +81,61 @@ for i, caso in enumerate(casos):
     for celula in caso["celulas"]:
         print(f"    {celula}")
 """
+def construir_red_de_flujo(caso, adyacencia):
+    # Crear el diccionario de la red de flujo como un grafo dirigido
+    red_flujo = defaultdict(list)
+    
+    # Nodos especiales para la fuente (entrada) y el sumidero (salida)
+    fuente = 'fuente'
+    sumidero = 'sumidero'
+    
+    # Iterar sobre las células en el caso
+    for celula in caso['celulas']:
+        if celula.tipo == 1:
+            # Conectar la fuente a todas las células de tipo 1
+            red_flujo[fuente].append(celula.id)
+        
+        elif celula.tipo == 3:
+            # Conectar las células de tipo 3 al sumidero
+            red_flujo[celula.id].append(sumidero)
+        
+        # Conectar las células entre sí usando la lista de adyacencia
+        for adyacente in adyacencia[celula.id]:
+            # Evitar conexiones no deseadas
+            if celula.tipo == 1 and caso['celulas'][adyacente-1].tipo != 2:
+                continue  # Células de tipo 1 solo se conectan con células de tipo 2
+            if caso['celulas'][adyacente-1].tipo == 3 and celula.tipo != 2:
+                continue  # Células de tipo 3 solo pueden conectarse desde células de tipo 2
+            # Agregar el enlace en la red de flujo
+            red_flujo[celula.id].append(adyacente)
+    
+    return red_flujo
+
 for i, celulas in enumerate(casos):
     print('cambio caso')
     adyacencia = construir_lista_adyacencia(celulas)
+    casosAdyacencia.append(adyacencia)
     for celula, adyacentes in adyacencia.items():
         print(f"Célula {celula} -> {sorted(adyacentes)}")
+        
 
+for caso in casos:
+    print('nuevo caso')
+    print(caso['distancia_maxima'])
+    for celula in caso['celulas']:
+        if celula.tipo==1:
+            print(celula.id, 'celula iniciadora')
+        if celula.tipo ==2:
+            print(celula.id, 'celula calculadora')
+        if celula.tipo ==3:
+            print(celula.id, 'celula de respuesta')
+
+redes_de_flujo=[]     
+for i in range(len(casosAdyacencia)):
+    caso=casos[i]
+    adyacencia=casosAdyacencia[i]
+    redes_de_flujo.append(construir_red_de_flujo(caso, adyacencia))
+
+
+for red in redes_de_flujo:
+    print(red)
