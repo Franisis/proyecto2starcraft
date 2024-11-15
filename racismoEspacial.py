@@ -1,15 +1,32 @@
+from math import sqrt
+from collections import defaultdict, deque
+
 import sys
-from collections import defaultdict
+
 class Celula:
-    def __init__(self, id, x, y, tipo, peptidos_compartidos):
+    def __init__(self, id, x, y, tipo, peptidos):
         self.id = id
         self.x = x
         self.y = y
         self.tipo = tipo
-        self.peptidos_compartidos = peptidos_compartidos
+        self.peptidos = peptidos
 
     def __repr__(self):
-        return f"Celula(id={self.id}, x={self.x}, y={self.y}, tipo={self.tipo}, peptidos={self.peptidos_compartidos})"
+        return f"Celula(id={self.id}, x={self.x}, y={self.y}, tipo={self.tipo}, peptidos={self.peptidos})"
+
+
+def contar_coincidencias(cadena1, cadena2):
+    # Convertir las cadenas en listas de palabras
+    lista1 = cadena1
+    lista2 = cadena2
+    
+    # Contar cuántas palabras de la lista1 están en la lista2
+    coincidencias = sum(1 for palabra in lista1 if palabra in lista2)
+    
+    return coincidencias
+
+
+
 
 def leer_entrada():
     # Leer el número de casos
@@ -44,98 +61,126 @@ def leer_entrada():
         })
     
     return casos
-def construir_lista_adyacencia(caso):
-    # Diccionario para almacenar los péptidos y las células que los contienen
-    peptido_to_celulas = defaultdict(list)
-    
-    # Rellenar el diccionario con cada péptido y las células que lo contienen
-    for celula in caso['celulas']:
-        for peptido in celula.peptidos_compartidos:
-            peptido_to_celulas[peptido].append(celula.id)
-    
-    # Diccionario para la lista de adyacencia
-    adyacencia = defaultdict(set)
-    
-    # Construir la lista de adyacencia
-    for celulas_compartiendo in peptido_to_celulas.values():
-        # Crear pares de células que comparten al menos un péptido
-        for i in range(len(celulas_compartiendo)):
-            for j in range(i + 1, len(celulas_compartiendo)):
-                c1, c2 = celulas_compartiendo[i], celulas_compartiendo[j]
-                adyacencia[c1].add(c2)
-                adyacencia[c2].add(c1)
-    
-    return adyacencia
 
 
-# Llamar a la función para leer la entrada y mostrar el resultado
 
-casos = leer_entrada()
-casosAdyacencia = []
-"""
-for i, caso in enumerate(casos):
-    print(f"Caso {i + 1}:")
-    print(f"  Número de células: {caso['num_celulas']}")
-    print(f"  Distancia máxima: {caso['distancia_maxima']}")
-    print(f"  Células:")
-    for celula in caso["celulas"]:
-        print(f"    {celula}")
-"""
-def construir_red_de_flujo(caso, adyacencia):
-    # Crear el diccionario de la red de flujo como un grafo dirigido
-    red_flujo = defaultdict(list)
+
+def distancia(celula1, celula2):
+    return sqrt((celula1.x - celula2.x)**2 + (celula1.y - celula2.y)**2)
+
+
+def construir_red(caso, distancia_maxima):
     
-    # Nodos especiales para la fuente (entrada) y el sumidero (salida)
-    fuente = 'fuente'
-    sumidero = 'sumidero'
-    
-    # Iterar sobre las células en el caso
+    red_flujo = defaultdict(dict)  # Nodo apunta a un dict con sus vecinos y sus pesos
+
+    # Conectar fuente con las células tipo 1
     for celula in caso['celulas']:
         if celula.tipo == 1:
-            # Conectar la fuente a todas las células de tipo 1
-            red_flujo[fuente].append(celula.id)
-        
-        elif celula.tipo == 3:
-            # Conectar las células de tipo 3 al sumidero
-            red_flujo[celula.id].append(sumidero)
-        
-        # Conectar las células entre sí usando la lista de adyacencia
-        for adyacente in adyacencia[celula.id]:
-            # Evitar conexiones no deseadas
-            if celula.tipo == 1 and caso['celulas'][adyacente-1].tipo != 2:
-                continue  # Células de tipo 1 solo se conectan con células de tipo 2
-            if caso['celulas'][adyacente-1].tipo == 3 and celula.tipo != 2:
-                continue  # Células de tipo 3 solo pueden conectarse desde células de tipo 2
-            # Agregar el enlace en la red de flujo
-            red_flujo[celula.id].append(adyacente)
-    
+            red_flujo['fuente'][celula.id] = 1  # Peso arbitrario para las conexiones desde 'fuente'
+
+    # Conectar células tipo 3 con el sumidero
+    for celula in caso['celulas']:
+        if celula.tipo == 3:
+            red_flujo[celula.id]['sumidero'] = 1  # Peso arbitrario para las conexiones al 'sumidero'
+
+    # Conectar células entre sí según las reglas
+    for celula1 in caso['celulas']:
+        for celula2 in caso['celulas']:
+            if celula1.id != celula2.id:
+                # Si están dentro de la distancia máxima
+                if distancia(celula1, celula2) <= distancia_maxima:
+                    # Si tienen coincidencias en péptidos
+                    coincidencias = contar_coincidencias(celula1.peptidos, celula2.peptidos)
+                    if coincidencias > 0:
+                        # Reglas de conexión con pesos según coincidencias
+                        if celula1.tipo == 1 and celula2.tipo == 2:
+                            red_flujo[celula1.id][celula2.id] = coincidencias
+                        elif celula1.tipo == 2 and (celula2.tipo == 2 or celula2.tipo == 3):
+                            red_flujo[celula1.id][celula2.id] = coincidencias
+
     return red_flujo
 
-for i, celulas in enumerate(casos):
-    print('cambio caso')
-    adyacencia = construir_lista_adyacencia(celulas)
-    casosAdyacencia.append(adyacencia)
-    for celula, adyacentes in adyacencia.items():
-        print(f"Célula {celula} -> {sorted(adyacentes)}")
-        
 
+
+def bfs(capacity, flow, source, sink, parent):
+    """Realiza una búsqueda en anchura para encontrar un camino aumentante."""
+    visited = set()
+    queue = deque([source])
+    visited.add(source)
+
+    while queue:
+        current = queue.popleft()
+        for neighbor, cap in capacity[current].items():
+            if neighbor not in visited and cap - flow[current][neighbor] > 0:
+                parent[neighbor] = current
+                visited.add(neighbor)
+                if neighbor == sink:
+                    return True
+                queue.append(neighbor)
+    return False
+
+def edmonds_karp(network, source, sink):
+    """Calcula el flujo máximo utilizando Edmonds-Karp."""
+    # Inicializamos capacidades y flujos
+    capacity = defaultdict(lambda: defaultdict(int))
+    for u, neighbors in network.items():
+        for v, cap in neighbors.items():
+            capacity[u][v] = cap
+
+    flow = defaultdict(lambda: defaultdict(int))
+    parent = {}
+
+    max_flow = 0
+
+    while bfs(capacity, flow, source, sink, parent):
+        # Encuentra el flujo máximo a través del camino aumentante
+        path_flow = float('Inf')
+        s = sink
+
+        while s != source:
+            path_flow = min(path_flow, capacity[parent[s]][s] - flow[parent[s]][s])
+            s = parent[s]
+
+        # Actualiza los flujos en las aristas del camino
+        v = sink
+        while v != source:
+            u = parent[v]
+            flow[u][v] += path_flow
+            flow[v][u] -= path_flow
+            v = parent[v]
+
+        max_flow += path_flow
+
+    return max_flow
+
+
+
+
+casos = leer_entrada()
 for caso in casos:
-    print('nuevo caso')
-    print(caso['distancia_maxima'])
-    for celula in caso['celulas']:
-        if celula.tipo==1:
-            print(celula.id, 'celula iniciadora')
-        if celula.tipo ==2:
-            print(celula.id, 'celula calculadora')
-        if celula.tipo ==3:
-            print(celula.id, 'celula de respuesta')
+    distanciaMaxima = caso['distancia_maxima']
+    red=construir_red(caso, caso['distancia_maxima'])  #red de flujo original  
+    flujoMaximo=edmonds_karp(red, 'fuente', 'sumidero')
+    flujoMinimo= sys.maxsize
+    mexico= None
+    new=None
+    for celula in list(caso['celulas']):
+        
+        if celula.tipo==2:
+            
+            casoCopy = caso.copy()
+            casoCopy['celulas'].pop(casoCopy['celulas'].index(celula)) #borra la celula del caso para construir una nueva red de flujo sin esa celula
+            
+            blockedNet = construir_red(caso, distanciaMaxima)
+            maxflow = edmonds_karp(blockedNet, 'fuente', 'sumidero')
+            
+            
+            if maxflow<= flujoMinimo and maxflow<flujoMaximo and maxflow>0:
+                new = celula.id
+                flujoMinimo = maxflow
+                mexico = flujoMaximo
+                print(new,flujoMinimo,flujoMaximo)
+                
+            
 
-redes_de_flujo=[]     
-for i in range(len(casosAdyacencia)):
-    caso=casos[i]
-    adyacencia=casosAdyacencia[i]
-    redes_de_flujo.append(construir_red_de_flujo(caso, adyacencia))
-
-
-for red in redes_de_flujo:
-    print(red)
+    
